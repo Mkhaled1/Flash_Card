@@ -7,7 +7,7 @@ const { useState, useEffect, useRef } = React;
 // Simple API client wrapper around fetch() to communicate with the backend.
 // All REST calls are centralized here to keep the UI components clean.
 class APIClient {
-    constructor(baseURL = 'http://localhost:5000/api') {
+    constructor(baseURL = 'http://192.168.1.25:5000/api') {
         this.baseURL = baseURL;
     }
 
