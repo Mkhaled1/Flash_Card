@@ -7,7 +7,9 @@ const { useState, useEffect, useRef } = React;
 // Simple API client wrapper around fetch() to communicate with the backend.
 // All REST calls are centralized here to keep the UI components clean.
 class APIClient {
-    constructor(baseURL = 'http://192.168.1.25:5000/api') {
+    constructor(baseURL = window.location.port === '8000'
+        ? `${window.location.protocol}//${window.location.hostname}:5000/api`
+        : '/api') {
         this.baseURL = baseURL;
     }
 
@@ -333,21 +335,13 @@ function ImportCSVModal({ onClose, onSuccess }) {
                 const fileContent = event.target.result;
 
                 try {
-                    const response = await fetch('http://localhost:5000/api/decks/import-csv', {
+                    await api.request('/decks/import-csv', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             deck_name: deckName,
                             file_content: fileContent
                         })
                     });
-
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error || 'Import failed');
-                    }
-
-                    const result = await response.json();
                     onSuccess();
                 } catch (err) {
                     setError(err.message);

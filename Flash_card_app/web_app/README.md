@@ -14,6 +14,21 @@ A modern web-based flashcard application for learning German using spaced repeti
 ✅ **Modern UI** - Material Design-inspired interface with gradient buttons  
 ✅ **Responsive Design** - Works on desktop and mobile devices  
 
+## Deploying to Render
+
+The repository includes a `render.yaml` Blueprint configuration. In Render, create a
+new Blueprint and select this repository. Render will build and serve the frontend
+and Flask API together; the deployed URL works on phones and computers.
+
+For data that must survive deploys and restarts, create a Render PostgreSQL database
+and set the web service's `DATABASE_URL` environment variable to its **internal**
+connection URL. Without that setting, the app uses SQLite, which is not persistent
+on Render's free web-service filesystem.
+
+The app currently has no login or access control. Anyone who can reach the deployed
+URL can view, change, and delete its decks, so don't store private data or share the
+URL until authentication is added.
+
 ## Project Structure
 
 ```

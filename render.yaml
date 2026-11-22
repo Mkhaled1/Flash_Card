@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: german-flashcard-app
+    runtime: python
+    plan: free
+    rootDir: Flash_card_app/web_app
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --chdir backend --bind 0.0.0.0:$PORT run:app
+    healthCheckPath: /api/health

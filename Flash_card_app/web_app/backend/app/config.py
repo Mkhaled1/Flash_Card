@@ -1,9 +1,16 @@
 import os
-from datetime import datetime
+
+
+database_url = os.environ.get("DATABASE_URL", "sqlite:///flashcards.db")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+elif database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
 
 class Config:
     """Flask application configuration"""
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///flashcards.db'
+    SQLALCHEMY_DATABASE_URI = database_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JSON_SORT_KEYS = False
     
