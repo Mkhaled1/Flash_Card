@@ -4,15 +4,18 @@ A modern web-based flashcard application for learning German using spaced repeti
 
 ## Features
 
-✅ **SM-2 Spaced Repetition Algorithm** - Optimized review scheduling based on difficulty  
-✅ **6-Level Status System** - New → Unknown → Hard → Medium → Memorized → Perfectly Memorized  
-✅ **Interactive Card Flipping** - Smooth 3D flip animations  
-✅ **Real-time Progress** - Track mastery percentage and learning progress  
-✅ **Deck Management** - Create, delete, and organize multiple decks  
-✅ **Card Editor** - Add, edit, and delete flashcards  
-✅ **Progress Visualization** - Doughnut charts showing card distribution  
-✅ **Modern UI** - Material Design-inspired interface with gradient buttons  
-✅ **Responsive Design** - Works on desktop and mobile devices  
+- ✅ **SM-2 Spaced Repetition Algorithm** - Optimized review scheduling based on difficulty
+- ✅ **6-Level Status System** - New → Unknown → Hard → Medium → Memorized → Perfectly Memorized
+- ✅ **Interactive Card Flipping** - Smooth 3D flip animations
+- ✅ **Real-time Progress** - Track mastery percentage and learning progress
+- ✅ **Deck Management** - Create, merge, reset, delete, import, and export decks
+- ✅ **Card Editor** - Add, edit, and delete flashcards
+- ✅ **Card Status** - Review ratings and reset selected or all cards
+- ✅ **Dark Mode** - Switch themes with the setting remembered on your device
+- ✅ **Continuous Study** - Prioritize due cards, then practice the rest until mastered
+- ✅ **Progress Visualization** - Doughnut charts showing card distribution
+- ✅ **Modern UI** - Material Design-inspired interface with gradient buttons
+- ✅ **Responsive Design** - Works on desktop and mobile devices
 
 ## Deploying to Render
 
@@ -32,98 +35,42 @@ URL until authentication is added.
 ## Project Structure
 
 ```
-web_app/
-├── backend/                 # Flask REST API
-│   ├── app/
-│   │   ├── __init__.py     # App factory
-│   │   ├── config.py       # Configuration
-│   │   ├── models.py       # Database models (Deck, FlashCard)
-│   │   └── routes.py       # API endpoints
-│   ├── run.py              # Entry point
-│   └── requirements.txt     # Python dependencies
-│
-└── frontend/               # React web application
-    ├── index.html          # HTML entry point
-    ├── app.js              # React components
-    └── styles.css          # Styling
+repository-root/
+├── requirements.txt
+├── render.yaml
+└── Flash_card_app/web_app/
+    ├── backend/             # Flask REST API
+    │   ├── app/
+    │   └── run.py
+    └── frontend/            # React web application
+        ├── index.html
+        ├── app.js
+        └── styles.css
 ```
 
 ## Installation & Setup
 
-### Backend (Flask API)
-
-#### Requirements
-- Python 3.8+
+### Requirements
+- Python 3.9+
 - pip
 
-#### Setup Instructions
+### Start the complete web app
 
-1. **Navigate to backend directory:**
-```bash
-cd web_app/backend
-```
-
-2. **Create virtual environment (optional but recommended):**
-```bash
-# Windows
-python -m venv venv
-venv\Scripts\activate
-
-# macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-```
-
-3. **Install dependencies:**
+From the repository root, install dependencies and start Flask:
 ```bash
 pip install -r requirements.txt
-```
-
-4. **Run the Flask server:**
-```bash
+cd Flash_card_app/web_app/backend
 python run.py
 ```
-
-The API will be available at `http://localhost:5000`
-
-### Frontend (React Web App)
-
-The frontend is a single-page application that uses React via CDN. No build step required!
-
-#### Setup Instructions
-
-1. **Navigate to frontend directory:**
-```bash
-cd web_app/frontend
-```
-
-2. **Start a local web server:**
-
-Using Python 3:
-```bash
-python -m http.server 8000
-```
-
-Using Python 2:
-```bash
-python -m SimpleHTTPServer 8000
-```
-
-Or using Node.js (if installed):
-```bash
-npx http-server
-```
-
-3. **Open in browser:**
-```
-http://localhost:8000
-```
+Open `http://localhost:5000`. Flask serves both the React frontend and API; no separate
+frontend server or build step is needed.
 
 ## API Endpoints
 
 ### Decks
 - `GET /api/decks` - Get all decks
 - `POST /api/decks` - Create new deck
+- `POST /api/decks/merge` - Merge selected decks into a new deck
 - `GET /api/decks/<id>` - Get deck details
 - `PUT /api/decks/<id>` - Update deck
 - `DELETE /api/decks/<id>` - Delete deck
@@ -138,8 +85,9 @@ http://localhost:8000
 - `DELETE /api/cards/<id>` - Delete card
 - `POST /api/cards/<id>/rate` - Rate card (updates SM-2)
 - `POST /api/cards/<id>/reset` - Reset card
-- `GET /api/decks/<id>/random-card` - Get random due card
+- `GET /api/decks/<id>/random-card` - Get a weighted study card (`include_all=true` includes non-due cards)
 - `POST /api/decks/<id>/bulk-reset` - Reset all cards
+- `GET /api/decks/<id>/export.csv` - Export a deck with study progress
 
 ### Import
 - `POST /api/decks/import-csv` - Import flashcards from CSV file
@@ -156,6 +104,9 @@ http://localhost:8000
 - Column 1: German word
 - Column 2: English definition
 - Optional header row (auto-detected)
+- Optional repetitions, interval, ease factor, and next-review date columns
+
+CSV exports include all six columns so importing an exported deck preserves study progress.
 
 **Response:**
 ```json
@@ -174,7 +125,8 @@ http://localhost:8000
 
 ## Database
 
-The application uses **SQLite** for data persistence. The database file (`flashcards.db`) is automatically created in the backend directory.
+The application uses SQLite locally and supports PostgreSQL through `DATABASE_URL` in production.
+The SQLite database file is automatically created in the backend instance directory.
 
 ### Models
 

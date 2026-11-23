@@ -52,11 +52,20 @@ class APIClient {
     deleteCard(id) { return this.request(`/cards/${id}`, { method: 'DELETE' }); }
     rateCard(id, quality) { return this.request(`/cards/${id}/rate`, { method: 'POST', body: JSON.stringify({ quality }) }); }
     resetCard(id) { return this.request(`/cards/${id}/reset`, { method: 'POST' }); }
-    getRandomCard(deckId, excludeCardId = null) {
-        const query = excludeCardId ? `?exclude_id=${excludeCardId}` : '';
+    getRandomCard(deckId, excludeCardId = null, includeAll = true) {
+        const params = new URLSearchParams({ include_all: String(includeAll) });
+        if (excludeCardId) params.set('exclude_id', excludeCardId);
+        const query = `?${params.toString()}`;
         return this.request(`/decks/${deckId}/random-card${query}`);
     }
     bulkReset(deckId) { return this.request(`/decks/${deckId}/bulk-reset`, { method: 'POST' }); }
+    mergeDecks(name, deckIds) {
+        return this.request('/decks/merge', {
+            method: 'POST',
+            body: JSON.stringify({ name, deck_ids: deckIds }),
+        });
+    }
+    getDeckExportUrl(deckId) { return `${this.baseURL}/decks/${deckId}/export.csv`; }
 }
 
 const api = new APIClient();
@@ -69,10 +78,16 @@ function App() {
     const [currentDeck, setCurrentDeck] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
     useEffect(() => {
         loadDecks();
     }, []);
+
+    useEffect(() => {
+        document.body.classList.toggle('dark-mode', darkMode);
+        localStorage.setItem('darkMode', String(darkMode));
+    }, [darkMode]);
 
     async function loadDecks() {
         try {
@@ -100,6 +115,11 @@ function App() {
 
     return (
         <div className="container">
+            <div className="app-toolbar">
+                <button className="btn btn-secondary" onClick={() => setDarkMode(!darkMode)}>
+                    {darkMode ? '☀️ Light mode' : '🌙 Dark mode'}
+                </button>
+            </div>
             {error && <div className="alert alert-danger">{error}</div>}
             
             {currentPage === 'menu' && (
@@ -126,10 +146,18 @@ function App() {
                     onBack={handleBackToMenu}
                 />
             )}
+
+            {currentPage === 'status' && currentDeck && (
+                <CardStatusPage
+                    deck={currentDeck}
+                    onBack={() => setCurrentPage('study')}
+                />
+            )}
             
             {currentPage === 'stats' && currentDeck && (
                 <StatsPage 
                     deck={currentDeck}
+                    darkMode={darkMode}
                     onBack={handleBackToMenu}
                 />
             )}
@@ -430,31 +458,36 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
     const [stats, setStats] = useState(null);
     const [completed, setCompleted] = useState(false);
     const [direction, setDirection] = useState('de-en');
+    const [includeAll, setIncludeAll] = useState(true);
+    const [completionMessage, setCompletionMessage] = useState('');
+    const [studyError, setStudyError] = useState(null);
 
     useEffect(() => {
-        loadRandomCard();
+        loadRandomCard(null, true);
         loadStats();
     }, [deck.id]);
 
-    // Load the next due card from the backend.
-    // Optionally exclude the current card so the user sees a different card immediately.
-    async function loadRandomCard(excludeCardId = null) {
+    async function loadRandomCard(excludeCardId = null, allCards = includeAll) {
         try {
             setLoading(true);
-            const data = await api.getRandomCard(deck.id, excludeCardId);
-            const cardData = data?.card ?? data;
+            const data = await api.getRandomCard(deck.id, excludeCardId, allCards);
+            const cardData = data && Object.prototype.hasOwnProperty.call(data, 'card')
+                ? data.card
+                : data;
+            setStudyError(null);
             if (cardData) {
                 setCard(cardData);
                 setFlipped(false);
                 setCompleted(false);
+                setStudyError(null);
             } else {
                 setCard(null);
                 setCompleted(true);
+                setCompletionMessage(data?.message || 'There are no cards available to study.');
             }
         } catch (err) {
-            console.error(err);
+            setStudyError('Failed to load a card: ' + err.message);
             setCard(null);
-            setCompleted(true);
         } finally {
             setLoading(false);
         }
@@ -465,7 +498,7 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
             const data = await api.getDeckStats(deck.id);
             setStats(data);
         } catch (err) {
-            console.error(err);
+            setStudyError('Failed to load deck statistics: ' + err.message);
         }
     }
 
@@ -478,27 +511,19 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
         try {
             setLoading(true);
             await api.rateCard(card.id, quality);
-            await loadRandomCard(card.id);
+            await loadRandomCard(card.id, includeAll);
             await loadStats();
         } catch (err) {
-            console.error(err);
+            setStudyError('Failed to save your rating: ' + err.message);
         } finally {
             setLoading(false);
         }
     }
 
-    async function handleStudyAgain() {
-        try {
-            setLoading(true);
-            setCompleted(false);
-            await api.bulkReset(deck.id);
-            await loadRandomCard();
-            await loadStats();
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
+    function changeStudyMode(allCards) {
+        setIncludeAll(allCards);
+        setCompleted(false);
+        loadRandomCard(null, allCards);
     }
 
     return (
@@ -506,6 +531,21 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
                 <h1>{deck.name}</h1>
                 <button className="btn btn-secondary" onClick={onBack}>← Back to Menu</button>
+            </div>
+
+            <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px'}}>
+                <button
+                    className={"btn " + (includeAll ? 'btn-primary' : 'btn-secondary')}
+                    onClick={() => changeStudyMode(true)}
+                >
+                    Study all cards
+                </button>
+                <button
+                    className={"btn " + (!includeAll ? 'btn-primary' : 'btn-secondary')}
+                    onClick={() => changeStudyMode(false)}
+                >
+                    Study due cards only
+                </button>
             </div>
 
             <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px'}}>
@@ -540,13 +580,29 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
                 </div>
             )}
 
+            {studyError && <div className="alert alert-danger">{studyError}</div>}
+
             {completed ? (
                 <div className="card" style={{textAlign: 'center', padding: '40px'}}>
-                    <h2 style={{color: 'var(--success)', marginBottom: '10px'}}>🎉 All Done!</h2>
-                    <p>You've reviewed all due cards. Great job!</p>
-                    <button className="btn btn-primary btn-lg" style={{marginTop: '20px'}} onClick={handleStudyAgain}>
-                        Study Again
-                    </button>
+                    <h2 style={{color: 'var(--success)', marginBottom: '10px'}}>
+                        {includeAll && completionMessage === 'All cards are mastered'
+                            ? '🎉 Deck mastered!'
+                            : includeAll ? '🎉 No cards to study yet' : '🎉 All done for today!'}
+                    </h2>
+                    <p>{completionMessage}</p>
+                    {!includeAll && (
+                        <button
+                            className="btn btn-primary btn-lg"
+                            style={{marginTop: '20px'}}
+                            onClick={() => changeStudyMode(true)}
+                        >
+                            Study all cards
+                        </button>
+                    )}
+                    <div className="btn-group">
+                        <button className="btn btn-secondary" onClick={onBack}>← Back to Menu</button>
+                        <button className="btn btn-primary" onClick={() => setCurrentPage('editor')}>✏️ Edit Deck</button>
+                    </div>
                 </div>
             ) : card ? (
                 <>
@@ -611,8 +667,16 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
                         <button className="btn btn-secondary" onClick={onBack}>← Back to Menu</button>
                         <button className="btn btn-primary" onClick={() => setCurrentPage('editor')}>✏️ Edit Deck</button>
                         <button className="btn btn-primary" onClick={() => setCurrentPage('stats')}>📊 View Stats</button>
+                        <button className="btn btn-primary" onClick={() => setCurrentPage('status')}>📋 Show Status</button>
                     </div>
                 </>
+            ) : studyError ? (
+                <button
+                    className="btn btn-primary"
+                    onClick={() => { loadRandomCard(null, includeAll); loadStats(); }}
+                >
+                    Retry
+                </button>
             ) : (
                 <div className="spinner"></div>
             )}
@@ -648,7 +712,28 @@ function EditorPage({ deck, onBack }) {
         }
     }
 
-    async function handleAddCard(e) {
+    function startAddingCard() {
+        setEditingCard(null);
+        setNewWord('');
+        setNewDef('');
+        setShowForm(true);
+    }
+
+    function startEditingCard(card) {
+        setEditingCard(card);
+        setNewWord(card.word);
+        setNewDef(card.definition || '');
+        setShowForm(true);
+    }
+
+    function cancelForm() {
+        setShowForm(false);
+        setEditingCard(null);
+        setNewWord('');
+        setNewDef('');
+    }
+
+    async function handleSaveCard(e) {
         e.preventDefault();
         if (!newWord.trim() || !newDef.trim()) {
             setError('Word and definition are required');
@@ -657,10 +742,15 @@ function EditorPage({ deck, onBack }) {
 
         try {
             setLoading(true);
-            await api.createCard(deck.id, newWord, newDef);
-            setNewWord('');
-            setNewDef('');
-            setShowForm(false);
+            if (editingCard) {
+                await api.updateCard(editingCard.id, {
+                    word: newWord.trim(),
+                    definition: newDef.trim(),
+                });
+            } else {
+                await api.createCard(deck.id, newWord.trim(), newDef.trim());
+            }
+            cancelForm();
             await loadCards();
             setError(null);
         } catch (err) {
@@ -693,12 +783,16 @@ function EditorPage({ deck, onBack }) {
 
             {error && <div className="alert alert-danger">{error}</div>}
 
-            <button className="btn btn-primary btn-lg btn-block" onClick={() => setShowForm(!showForm)}>
+            <button
+                className="btn btn-primary btn-lg btn-block"
+                onClick={showForm ? cancelForm : startAddingCard}
+            >
                 {showForm ? '✕ Cancel' : '➕ Add Card'}
             </button>
 
             {showForm && (
-                <form onSubmit={handleAddCard} className="card" style={{marginTop: '15px'}}>
+                <form onSubmit={handleSaveCard} className="card" style={{marginTop: '15px'}}>
+                    <h2>{editingCard ? 'Edit Card' : 'New Card'}</h2>
                     <div className="form-group">
                         <label>German Word</label>
                         <input 
@@ -716,9 +810,16 @@ function EditorPage({ deck, onBack }) {
                             placeholder="Enter English definition"
                         ></textarea>
                     </div>
-                    <button type="submit" className="btn btn-success" disabled={loading}>
-                        {loading ? 'Adding...' : 'Add Card'}
-                    </button>
+                    <div className="btn-group">
+                        <button type="submit" className="btn btn-success" disabled={loading}>
+                            {loading ? 'Saving...' : editingCard ? 'Save Changes' : 'Add Card'}
+                        </button>
+                        {editingCard && (
+                            <button type="button" className="btn btn-secondary" onClick={cancelForm}>
+                                Cancel
+                            </button>
+                        )}
+                    </div>
                 </form>
             )}
 
@@ -731,34 +832,163 @@ function EditorPage({ deck, onBack }) {
                     <p style={{textAlign: 'center', color: '#9CA3AF'}}>No cards in this deck yet</p>
                 </div>
             ) : (
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Word</th>
-                            <th>Definition</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {cards.map(card => (
-                            <tr key={card.id}>
-                                <td><strong>{card.word}</strong></td>
-                                <td>{card.definition}</td>
-                                <td><span className={`badge badge-${card.rating.toLowerCase().replace(' ', '-')}`}>{card.rating}</span></td>
-                                <td>
-                                    <button 
-                                        className="btn btn-danger" 
-                                        style={{padding: '5px 10px', fontSize: '12px'}}
-                                        onClick={() => handleDeleteCard(card.id)}
-                                    >
-                                        Delete
-                                    </button>
-                                </td>
+                <div className="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Word</th>
+                                <th>Definition</th>
+                                <th>Status</th>
+                                <th>Action</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {cards.map(card => (
+                                <tr key={card.id}>
+                                    <td><strong>{card.word}</strong></td>
+                                    <td>{card.definition}</td>
+                                    <td><span className={`badge badge-${card.rating.toLowerCase().replace(' ', '-')}`}>{card.rating}</span></td>
+                                    <td>
+                                        <button
+                                            className="btn btn-secondary"
+                                            style={{padding: '5px 10px', fontSize: '12px', marginRight: '5px'}}
+                                            onClick={() => startEditingCard(card)}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            className="btn btn-danger"
+                                            style={{padding: '5px 10px', fontSize: '12px'}}
+                                            onClick={() => handleDeleteCard(card.id)}
+                                        >
+                                            Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function CardStatusPage({ deck, onBack }) {
+    const [cards, setCards] = useState([]);
+    const [selectedCardId, setSelectedCardId] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        loadCards();
+    }, [deck.id]);
+
+    async function loadCards() {
+        try {
+            setLoading(true);
+            setCards(await api.getCards(deck.id));
+            setError(null);
+        } catch (err) {
+            setError('Failed to load card statuses: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleResetCard(cardId) {
+        try {
+            setLoading(true);
+            await api.resetCard(cardId);
+            await loadCards();
+        } catch (err) {
+            setError('Failed to reset card: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleResetSelected() {
+        if (!selectedCardId) return;
+        await handleResetCard(selectedCardId);
+    }
+
+    async function handleResetAll() {
+        if (!confirm(`Reset all cards in "${deck.name}"?`)) return;
+        try {
+            setLoading(true);
+            await api.bulkReset(deck.id);
+            setSelectedCardId(null);
+            await loadCards();
+        } catch (err) {
+            setError('Failed to reset cards: ' + err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="page">
+            <div className="page-heading">
+                <h1>Status - {deck.name}</h1>
+                <button className="btn btn-secondary" onClick={onBack}>← Back to Study</button>
+            </div>
+
+            {error && <div className="alert alert-danger">{error}</div>}
+            <div className="btn-group">
+                <button className="btn btn-warning" disabled={!selectedCardId || loading} onClick={handleResetSelected}>
+                    Reset Selected
+                </button>
+                <button className="btn btn-danger" disabled={!cards.length || loading} onClick={handleResetAll}>
+                    Reset All
+                </button>
+            </div>
+
+            {loading ? (
+                <div className="spinner"></div>
+            ) : cards.length === 0 ? (
+                <div className="card"><p>No cards in this deck.</p></div>
+            ) : (
+                <div className="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Select</th>
+                                <th>Word</th>
+                                <th>Status</th>
+                                <th>Next Review</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cards.map(card => (
+                                <tr
+                                    key={card.id}
+                                    className={selectedCardId === card.id ? 'selected-row' : ''}
+                                    onClick={() => setSelectedCardId(card.id)}
+                                >
+                                    <td>
+                                        <input
+                                            type="radio"
+                                            name="selected-card"
+                                            checked={selectedCardId === card.id}
+                                            onChange={() => setSelectedCardId(card.id)}
+                                            aria-label={`Select ${card.word}`}
+                                        />
+                                    </td>
+                                    <td>{card.word}</td>
+                                    <td><span className={`badge badge-${card.rating.toLowerCase().replace(/\s/g, '-')}`}>{card.rating}</span></td>
+                                    <td>{card.next_due}</td>
+                                    <td>
+                                        <button className="btn btn-warning" onClick={() => handleResetCard(card.id)}>
+                                            Reset
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
         </div>
     );
@@ -766,7 +996,7 @@ function EditorPage({ deck, onBack }) {
 
 // ==================== STATS PAGE ====================
 // Displays deck statistics and renders a progress chart based on card ratings.
-function StatsPage({ deck, onBack }) {
+function StatsPage({ deck, darkMode, onBack }) {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const chartRef = useRef(null);
@@ -777,10 +1007,10 @@ function StatsPage({ deck, onBack }) {
     }, [deck.id]);
 
     useEffect(() => {
-        if (stats && chartRef.current) {
+        if (stats && !loading && chartRef.current) {
             drawChart();
         }
-    }, [stats]);
+    }, [stats, darkMode, loading]);
 
     async function loadStats() {
         try {
@@ -825,7 +1055,11 @@ function StatsPage({ deck, onBack }) {
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: { font: { size: 12 }, padding: 15 }
+                        labels: {
+                            color: darkMode ? '#F9FAFB' : '#111827',
+                            font: { size: 12 },
+                            padding: 15,
+                        }
                     }
                 }
             }
@@ -895,6 +1129,7 @@ function StatsPage({ deck, onBack }) {
 function DeckManagerPage({ decks, onRefresh, onBack }) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [showMerge, setShowMerge] = useState(false);
 
     async function handleDeleteDeck(deckId, deckName) {
         if (!confirm(`Delete deck "${deckName}" and all its cards?`)) return;
@@ -928,9 +1163,25 @@ function DeckManagerPage({ decks, onRefresh, onBack }) {
 
     return (
         <div className="page">
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
+            {showMerge && (
+                <MergeDecksModal
+                    decks={decks}
+                    onClose={() => setShowMerge(false)}
+                    onSuccess={async () => {
+                        setShowMerge(false);
+                        await onRefresh();
+                    }}
+                />
+            )}
+
+            <div className="page-heading">
                 <h1>Deck Manager</h1>
-                <button className="btn btn-secondary" onClick={onBack}>← Back to Menu</button>
+                <div className="btn-group">
+                    <button className="btn btn-primary" disabled={decks.length < 2} onClick={() => setShowMerge(true)}>
+                        Merge Decks
+                    </button>
+                    <button className="btn btn-secondary" onClick={onBack}>← Back to Menu</button>
+                </div>
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}
@@ -942,44 +1193,129 @@ function DeckManagerPage({ decks, onRefresh, onBack }) {
                     <p style={{textAlign: 'center', color: '#9CA3AF'}}>No decks to manage</p>
                 </div>
             ) : (
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Deck Name</th>
-                            <th>Description</th>
-                            <th>Cards</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {decks.map(deck => (
-                            <tr key={deck.id}>
-                                <td><strong>{deck.name}</strong></td>
-                                <td>{deck.description || '—'}</td>
-                                <td>{deck.card_count}</td>
-                                <td>
-                                    <div className="btn-group" style={{gap: '5px'}}>
-                                        <button 
-                                            className="btn btn-warning" 
-                                            style={{padding: '5px 10px', fontSize: '12px'}}
-                                            onClick={() => handleResetDeck(deck.id, deck.name)}
-                                        >
-                                            Reset
-                                        </button>
-                                        <button 
-                                            className="btn btn-danger" 
-                                            style={{padding: '5px 10px', fontSize: '12px'}}
-                                            onClick={() => handleDeleteDeck(deck.id, deck.name)}
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                </td>
+                <div className="table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Deck Name</th>
+                                <th>Description</th>
+                                <th>Cards</th>
+                                <th>Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {decks.map(deck => (
+                                <tr key={deck.id}>
+                                    <td><strong>{deck.name}</strong></td>
+                                    <td>{deck.description || '—'}</td>
+                                    <td>{deck.card_count}</td>
+                                    <td>
+                                        <div className="btn-group deck-actions" style={{gap: '5px'}}>
+                                            <button
+                                                className="btn btn-warning"
+                                                style={{padding: '5px 10px', fontSize: '12px'}}
+                                                onClick={() => handleResetDeck(deck.id, deck.name)}
+                                            >
+                                                Reset
+                                            </button>
+                                            <a
+                                                className="btn btn-primary"
+                                                style={{padding: '5px 10px', fontSize: '12px'}}
+                                                href={api.getDeckExportUrl(deck.id)}
+                                            >
+                                                Export CSV
+                                            </a>
+                                            <button
+                                                className="btn btn-danger"
+                                                style={{padding: '5px 10px', fontSize: '12px'}}
+                                                onClick={() => handleDeleteDeck(deck.id, deck.name)}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             )}
+        </div>
+    );
+}
+
+function MergeDecksModal({ decks, onClose, onSuccess }) {
+    const [name, setName] = useState('');
+    const [selectedDeckIds, setSelectedDeckIds] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    function toggleDeck(deckId) {
+        setSelectedDeckIds(current => current.includes(deckId)
+            ? current.filter(id => id !== deckId)
+            : [...current, deckId]);
+    }
+
+    async function handleSubmit(e) {
+        e.preventDefault();
+        if (!name.trim()) {
+            setError('Enter a name for the merged deck.');
+            return;
+        }
+        if (selectedDeckIds.length < 2) {
+            setError('Choose at least two decks to merge.');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            await api.mergeDecks(name.trim(), selectedDeckIds);
+            await onSuccess();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div className="modal open">
+            <div className="modal-content">
+                <h2>Merge Decks</h2>
+                {error && <div className="alert alert-danger">{error}</div>}
+                <form onSubmit={handleSubmit}>
+                    <div className="form-group">
+                        <label htmlFor="merged-deck-name">New deck name</label>
+                        <input
+                            id="merged-deck-name"
+                            value={name}
+                            onChange={event => setName(event.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                    <fieldset className="merge-deck-list">
+                        <legend>Select at least two source decks</legend>
+                        {decks.map(deck => (
+                            <label className="merge-deck-option" key={deck.id}>
+                                <input
+                                    type="checkbox"
+                                    checked={selectedDeckIds.includes(deck.id)}
+                                    onChange={() => toggleDeck(deck.id)}
+                                />
+                                <span>{deck.name} ({deck.card_count} cards)</span>
+                            </label>
+                        ))}
+                    </fieldset>
+                    <div className="btn-group">
+                        <button className="btn btn-success" type="submit" disabled={loading}>
+                            {loading ? 'Merging...' : 'Create Merged Deck'}
+                        </button>
+                        <button className="btn btn-secondary" type="button" onClick={onClose}>
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     );
 }

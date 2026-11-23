@@ -15,14 +15,14 @@ Your PySide6 desktop flashcard application has been successfully converted to a 
 
 ### Windows Users
 ```bash
-cd web_app
+cd Flash_card_app/web_app
 run.bat
 ```
 ✅ That's it! Browser opens automatically.
 
 ### macOS/Linux Users  
 ```bash
-cd web_app
+cd Flash_card_app/web_app
 chmod +x run.sh
 ./run.sh
 ```
@@ -30,20 +30,14 @@ chmod +x run.sh
 
 ### Manual Launch (Any OS)
 
-**Terminal 1:**
+From the repository root:
 ```bash
-cd web_app/backend
 pip install -r requirements.txt
+cd Flash_card_app/web_app/backend
 python run.py
 ```
 
-**Terminal 2:**
-```bash
-cd web_app/frontend
-python -m http.server 8000
-```
-
-Then open: **http://localhost:8000**
+Then open: **http://localhost:5000**
 
 ---
 
@@ -61,28 +55,16 @@ Then open: **http://localhost:8000**
 ## 📊 Folder Structure
 
 ```
-web_app/
-├── backend/               Flask REST API
-│   ├── app/
-│   │   ├── config.py     Configuration
-│   │   ├── models.py     Database & SM-2 algorithm
-│   │   ├── routes.py     API endpoints
-│   │   └── __init__.py
-│   ├── run.py            Start backend here
-│   └── requirements.txt   Python dependencies
-│
-├── frontend/              React Web UI
-│   ├── index.html        HTML page
-│   ├── app.js            React components
-│   └── styles.css        Styling
-│
-├── import_csv.py         (Optional) Import from CSV
-├── run.bat               (Windows) Auto launcher
-├── run.sh                (Mac/Linux) Auto launcher
-│
-├── QUICKSTART.md         ← Read this for setup
-├── README.md             Full documentation
-└── CONVERSION_SUMMARY.md Technical details
+repository-root/
+├── requirements.txt
+├── render.yaml
+└── Flash_card_app/web_app/
+    ├── backend/           Flask API and app startup
+    ├── frontend/          React web UI
+    ├── run.bat            Windows launcher
+    ├── run.sh             macOS/Linux launcher
+    ├── QUICKSTART.md      Setup instructions
+    └── README.md          Full documentation
 ```
 
 ---
@@ -129,19 +111,19 @@ web_app/
 ## ❓ Quick FAQ
 
 **Q: Do I need to install anything special?**  
-A: Just Python 3.8+ and a web browser. That's it!
+A: Just Python 3.9+ and a web browser. That's it!
 
 **Q: Where does my data go?**  
 A: Stored in `flashcards.db` in the backend folder.
 
 **Q: Can I use it on my phone?**  
-A: Yes! It's fully responsive. Access from any device via `http://<your-ip>:8000`
+A: Yes! It's responsive. On the same Wi-Fi, open `http://<computer-ip>:5000`; a Render deployment can be opened from anywhere.
 
 **Q: What if I have CSV data?**  
 A: Use `import_csv.py` to import your existing decks.
 
 **Q: Can I deploy this online?**  
-A: Yes! Backend works with Heroku, AWS, DigitalOcean. Frontend works with Vercel, Netlify.
+A: Yes. Use the included Render Blueprint; configure PostgreSQL for persistent online data. See [README.md](README.md).
 
 ---
 

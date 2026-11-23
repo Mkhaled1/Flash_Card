@@ -31,6 +31,13 @@ body {
     color: var(--dark);
 }
 
+input,
+textarea,
+select {
+    background: var(--card-bg);
+    color: var(--dark);
+}
+
 /* ==================== CONTAINER & LAYOUT ==================== */
 .container {
     max-width: 1200px;
@@ -44,6 +51,24 @@ body {
 .page {
     width: 100%;
     flex: 1;
+}
+
+.app-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.page-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.page-heading .btn-group {
+    margin: 0;
 }
 
 .header {
@@ -306,7 +331,39 @@ body {
     min-height: 100px;
 }
 
+.merge-deck-list {
+    display: grid;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.merge-deck-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.merge-deck-option input,
+.selected-row input {
+    accent-color: var(--primary);
+}
+
 /* ==================== TABLES ==================== */
+.table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.table-scroll table {
+    min-width: 560px;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -335,6 +392,10 @@ td {
 
 tr:hover {
     background-color: var(--light);
+}
+
+.selected-row {
+    background-color: rgba(79, 70, 229, 0.12);
 }
 
 tr:last-child td {
@@ -377,7 +438,8 @@ tr:last-child td {
     color: #065F46;
 }
 
-.badge-perfectly {
+.badge-perfectly,
+.badge-perfectly-memorized {
     background-color: #CCFBF1;
     color: #134E4A;
 }
@@ -624,5 +686,88 @@ tr:last-child td {
     
     .modal-content {
         width: 95%;
+        padding: 20px;
+    }
+
+    .page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .page-heading .btn-group {
+        flex-wrap: wrap;
+    }
+}
+
+body.dark-mode {
+    --light: #111827;
+    --dark: #F9FAFB;
+    --card-bg: #1F2937;
+    --border-color: #374151;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    --shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.45);
+    background-color: #111827;
+}
+
+body.dark-mode th {
+    background-color: #374151;
+}
+
+body.dark-mode .card-subtitle,
+body.dark-mode .stat-label,
+body.dark-mode .flashcard-label {
+    color: #D1D5DB;
+}
+
+body.dark-mode .alert-success {
+    background-color: #064E3B;
+    color: #D1FAE5;
+}
+
+body.dark-mode .alert-danger {
+    background-color: #7F1D1D;
+    color: #FEE2E2;
+}
+
+body.dark-mode .alert-warning {
+    background-color: #78350F;
+    color: #FEF3C7;
+}
+
+body.dark-mode .alert-info {
+    background-color: #164E63;
+    color: #CFFAFE;
+}
+
+body.dark-mode .badge-unknown,
+body.dark-mode .badge-hard,
+body.dark-mode .badge-medium,
+body.dark-mode .badge-memorized,
+body.dark-mode .badge-perfectly {
+    color: #111827;
+}
+
+body.dark-mode .badge-perfectly-memorized {
+    color: #111827;
+}
+
+body.dark-mode .rating-btn {
+    color: #111827;
+}
+
+body.dark-mode .rating-btn:hover {
+    color: #111827;
+}
+
+body.dark-mode .selected-row {
+    background-color: rgba(129, 140, 248, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
     }
 }

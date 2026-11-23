@@ -1,31 +1,16 @@
 @echo off
-REM Quick launcher script for German Flashcard Web App
-REM Run this to start both backend and frontend servers
+setlocal
+
+echo Installing dependencies...
+pushd "%~dp0..\.."
+python -m pip install -r requirements.txt
+if errorlevel 1 (
+    popd
+    exit /b 1
+)
+popd
 
 echo Starting German Flashcard Web App...
-echo.
-
-REM Start backend
-echo Starting Flask Backend on http://localhost:5000...
-start cmd /k "cd backend && pip install -r requirements.txt & python run.py"
-
-REM Wait a moment for backend to start
-timeout /t 3 /nobreak
-
-REM Start frontend
-echo Starting Frontend on http://localhost:8000...
-start cmd /k "cd frontend && python -m http.server 8000"
-
-timeout /t 2 /nobreak
-
-REM Open browser
-echo.
-echo Opening browser...
-start http://localhost:8000
-
-echo.
-echo Both servers are running!
-echo - Backend: http://localhost:5000
-echo - Frontend: http://localhost:8000
-echo.
-echo Close the command windows to shut down the servers.
+start "German Flashcard App" cmd /k "pushd ""%~dp0backend"" && python run.py"
+timeout /t 3 /nobreak >nul
+start "" http://localhost:5000

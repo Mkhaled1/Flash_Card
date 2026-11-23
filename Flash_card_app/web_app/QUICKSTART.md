@@ -2,42 +2,16 @@
 
 ## Running the Web App
 
-### Step 1: Start the Backend (Flask API)
-
-Open a terminal/PowerShell and run:
+From the repository root, install dependencies and start Flask:
 
 ```bash
-cd "d:\German\Flash card app\web_app\backend"
 pip install -r requirements.txt
+cd Flash_card_app/web_app/backend
 python run.py
 ```
 
-You should see:
-```
- * Running on http://127.0.0.1:5000
-```
-
-**Leave this terminal open.**
-
-### Step 2: Start the Frontend
-
-Open another terminal/PowerShell and run:
-
-```bash
-cd "d:\German\Flash card app\web_app\frontend"
-python -m http.server 8000
-```
-
-You should see:
-```
-Serving HTTP on 0.0.0.0 port 8000...
-```
-
-### Step 3: Open in Browser
-
-Navigate to: **http://localhost:8000**
-
-That's it! Your flashcard app is now running. 🎉
+Open **http://localhost:5000**. Flask serves both the website and its API; no
+separate frontend server is needed. The `run.bat` and `run.sh` scripts also start it.
 
 ---
 
@@ -120,19 +94,14 @@ Buch,Book
 
 ## Shutting Down
 
-1. Stop the frontend server: Press `Ctrl+C` in the frontend terminal
-2. Stop the backend server: Press `Ctrl+C` in the backend terminal
+Press `Ctrl+C` in the terminal running Flask.
 
 ---
 
 ## Troubleshooting
 
 **"Address already in use" error?**
-- The port is already in use. Try a different port:
-  ```bash
-  python -m http.server 9000  # Use port 9000 instead
-  ```
-  Then open `http://localhost:9000`
+- The port is already in use. Stop the other process using port 5000 or set a different `PORT`.
 
 **"Failed to load decks" error?**
 - Make sure the Flask server is running
@@ -140,7 +109,7 @@ Buch,Book
 
 **Cards not showing?**
 - Refresh the browser (Ctrl+R or Cmd+R)
-- Make sure both terminals are still running
+- Make sure the Flask server is still running
 
 ---
 
