@@ -260,6 +260,51 @@ select {
     justify-content: center;
 }
 
+.flashcard.rating-new .flashcard-inner {
+    background: #FEF3C7;
+    border-color: #F59E0B;
+    color: #713F12;
+}
+
+.flashcard.rating-unknown .flashcard-inner {
+    background: #7F1D1D;
+    border-color: #5F1010;
+    color: #FFFFFF;
+}
+
+.flashcard.rating-hard .flashcard-inner {
+    background: #DC2626;
+    border-color: #B91C1C;
+    color: #FFFFFF;
+}
+
+.flashcard.rating-medium .flashcard-inner {
+    background: #FACC15;
+    border-color: #A16207;
+    color: #713F12;
+}
+
+.flashcard.rating-memorized .flashcard-inner {
+    background: #15803D;
+    border-color: #166534;
+    color: #FFFFFF;
+}
+
+.flashcard.rating-perfectly-memorized .flashcard-inner {
+    background: #14532D;
+    border-color: #052E16;
+    color: #FFFFFF;
+}
+
+.flashcard.rating-new .flashcard-label,
+.flashcard.rating-unknown .flashcard-label,
+.flashcard.rating-hard .flashcard-label,
+.flashcard.rating-medium .flashcard-label,
+.flashcard.rating-memorized .flashcard-label,
+.flashcard.rating-perfectly-memorized .flashcard-label {
+    color: inherit;
+}
+
 .flashcard.flipped .flashcard-inner {
     transform: rotateY(180deg);
     -webkit-transform: rotateY(180deg);
@@ -414,8 +459,8 @@ tr:last-child td {
 }
 
 .badge-new {
-    background-color: #E0E7FF;
-    color: var(--primary);
+    background-color: #FEF3C7;
+    color: #713F12;
 }
 
 .badge-unknown {

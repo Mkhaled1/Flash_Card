@@ -707,6 +707,10 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
         loadRandomCard(null, allCards);
     }
 
+    const cardRatingClass = card
+        ? `rating-${card.rating.toLowerCase().replace(/\s/g, '-')}`
+        : '';
+
     return (
         <div className="page">
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px'}}>
@@ -799,7 +803,7 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
             ) : card ? (
                 <>
                     <div className="flashcard-container">
-                        <div className={`flashcard ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}>
+                        <div className={`flashcard ${cardRatingClass} ${flipped ? 'flipped' : ''}`} onClick={() => setFlipped(!flipped)}>
                             <div className="flashcard-inner">
                                 <div className="flashcard-front">
                                     <div className="flashcard-label">{direction === 'de-en' ? 'German Word' : 'English Word'}</div>
@@ -1228,7 +1232,19 @@ function StatsPage({ deck, darkMode, onBack }) {
 
         const labels = Object.keys(stats.ratings);
         const data = Object.values(stats.ratings);
-        const colors = ['#E0E7FF', '#FED7AA', '#FEDCDC', '#FEF3C7', '#D1FAE5', '#CCFBF1'];
+        const ratingColors = {
+            new: '#E0E7FF',
+            unknown: '#7F1D1D',
+            hard: '#DC2626',
+            medium: '#FACC15',
+            memorized: '#15803D',
+            perfect: '#14532D',
+            'perfectly memorized': '#14532D'
+        };
+        const colors = labels.map(label => {
+            const rating = label.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+            return ratingColors[rating] || ratingColors[rating.replace('perfectly', 'perfect')] || '#E5E7EB';
+        });
 
         chartInstance.current = new Chart(ctx, {
             type: 'doughnut',
