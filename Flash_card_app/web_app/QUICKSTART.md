@@ -20,8 +20,8 @@ separate frontend server is needed. The `run.bat` and `run.sh` scripts also star
 1. **Import or Create a Deck**
    - **Option A: Import CSV File**
      - Click "📥 Import CSV"
-     - Enter a deck name
      - Select your CSV file (German words in column 1, English definitions in column 2)
+     - The deck name is suggested from the CSV filename and can be edited
      - Click "Import Deck"
    
    - **Option B: Create Manually**
@@ -128,6 +128,8 @@ This web-based version includes all features from the original PySide6 desktop a
 The main differences:
 - Uses a web browser instead of desktop GUI
 - Uses SQLite database instead of CSV files
+- Study progress is saved in the app database. Use **Deck Manager → Export CSV** to save
+  a CSV snapshot containing progress; importing that export restores the progress.
 - Responsive design works on mobile and desktop
 - No installation required (just Python and a browser)
 

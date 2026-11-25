@@ -289,16 +289,18 @@ def get_random_card(deck_id):
     deck = Deck.query.get_or_404(deck_id)
     include_all = request.args.get('include_all', 'false').lower() == 'true'
     exclude_id = request.args.get('exclude_id', type=int)
-    due_cards = [card for card in deck.cards if card.is_due()]
+    study_cards = [
+        card for card in deck.cards
+        if card.get_rating() != 'Perfectly Memorized'
+    ]
 
-    if include_all and deck.cards and all(
-        card.get_rating() == 'Perfectly Memorized' for card in deck.cards
-    ):
+    if include_all and deck.cards and not study_cards:
         return jsonify({'card': None, 'message': 'All cards are mastered'}), 200
     if include_all and not deck.cards:
         return jsonify({'card': None, 'message': 'This deck has no cards yet'}), 200
 
-    candidates = due_cards or (deck.cards if include_all else [])
+    due_cards = [card for card in study_cards if card.is_due()]
+    candidates = due_cards or (study_cards if include_all else [])
     if not candidates:
         return jsonify({'card': None, 'message': 'No cards due for review'}), 200
 

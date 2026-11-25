@@ -323,12 +323,14 @@ function ImportCSVModal({ onClose, onSuccess }) {
         const selectedFile = e.target.files[0];
         if (!selectedFile) return;
 
-        if (!selectedFile.name.endsWith('.csv')) {
+        if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
             setError('Please select a CSV file');
             return;
         }
 
         setFile(selectedFile);
+        const suggestedName = selectedFile.name.replace(/\.csv$/i, '').trim();
+        setDeckName(currentName => currentName.trim() ? currentName : suggestedName);
         setError(null);
 
         // Read and preview file
@@ -622,10 +624,10 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
                     </div>
 
                     <p style={{textAlign: 'center', color: '#9CA3AF', marginBottom: '20px'}}>
-                        Click the card to reveal the definition
+                        {flipped ? 'Choose a rating for this card' : 'Click the card to reveal the definition'}
                     </p>
 
-                    <div className="rating-buttons">
+                    {flipped && <div className="rating-buttons">
                         <button 
                             className="rating-btn unknown" 
                             onClick={() => handleRate(0)}
@@ -661,7 +663,7 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
                         >
                             🤩 Perfect
                         </button>
-                    </div>
+                    </div>}
 
                     <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
                         <button className="btn btn-secondary" onClick={onBack}>← Back to Menu</button>
