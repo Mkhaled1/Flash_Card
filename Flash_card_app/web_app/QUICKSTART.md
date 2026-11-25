@@ -128,8 +128,9 @@ This web-based version includes all features from the original PySide6 desktop a
 The main differences:
 - Uses a web browser instead of desktop GUI
 - Uses SQLite database instead of CSV files
-- Study progress is saved in the app database. Use **Deck Manager → Export CSV** to save
-  a CSV snapshot containing progress; importing that export restores the progress.
+- In browsers that support file write access, importing with the CSV picker lets the app
+  update that file after each rating. Otherwise, use **Deck Manager → Export CSV** to
+  save a progress snapshot; importing that export restores the progress.
 - Responsive design works on mobile and desktop
 - No installation required (just Python and a browser)
 

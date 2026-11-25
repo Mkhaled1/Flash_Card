@@ -158,9 +158,20 @@ def get_deck_stats(deck_id):
     learning = sum(1 for c in cards if 0 < c.reps < 3)
     mastered = sum(1 for c in cards if c.reps >= 3)
     
-    # Calculate mastery percentage
+    # Calculate mastery percentage using a factor for each rating
+    rating_factors = {
+        'New': 0.0,
+        'Unknown': 0.2,
+        'Hard': 0.4,
+        'Medium': 0.6,
+        'Memorized': 0.8,
+        'Perfectly Memorized': 1.0,
+    }
     if total > 0:
-        mastery = (mastered * 3 + learning * 1.5) / (total * 3) * 100
+        mastery = sum(
+            count * rating_factors.get(rating, 0.0)
+            for rating, count in ratings.items()
+        ) / total * 100
     else:
         mastery = 0
     
@@ -315,7 +326,7 @@ def get_random_card(deck_id):
         'Hard': 3.0,
         'Medium': 2.0,
         'Memorized': 1.0,
-        'Perfectly Memorized': 0.5,
+        'Perfectly Memorized': 0.1,
     }
     card = random.choices(
         candidates,

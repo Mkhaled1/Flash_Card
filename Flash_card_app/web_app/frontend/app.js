@@ -70,6 +70,87 @@ class APIClient {
 
 const api = new APIClient();
 
+const CSV_HANDLE_DATABASE = 'flashcard-csv-handles';
+const CSV_HANDLE_STORE = 'deck-files';
+
+function openCSVHandleDatabase() {
+    if (!window.indexedDB) {
+        return Promise.reject(new Error('Browser storage is unavailable'));
+    }
+
+    return new Promise((resolve, reject) => {
+        const request = window.indexedDB.open(CSV_HANDLE_DATABASE, 1);
+        request.onupgradeneeded = () => {
+            request.result.createObjectStore(CSV_HANDLE_STORE);
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('Could not open browser storage'));
+    });
+}
+
+async function saveCSVFileHandle(deckId, fileHandle) {
+    const database = await openCSVHandleDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = database.transaction(CSV_HANDLE_STORE, 'readwrite');
+        transaction.objectStore(CSV_HANDLE_STORE).put(fileHandle, String(deckId));
+        transaction.oncomplete = () => {
+            database.close();
+            resolve();
+        };
+        transaction.onerror = () => {
+            database.close();
+            reject(transaction.error || new Error('Could not save the CSV file link'));
+        };
+        transaction.onabort = () => {
+            database.close();
+            reject(transaction.error || new Error('Could not save the CSV file link'));
+        };
+    });
+}
+
+async function getCSVFileHandle(deckId) {
+    const database = await openCSVHandleDatabase();
+    return new Promise((resolve, reject) => {
+        const transaction = database.transaction(CSV_HANDLE_STORE, 'readonly');
+        const request = transaction.objectStore(CSV_HANDLE_STORE).get(String(deckId));
+        request.onsuccess = () => {
+            database.close();
+            resolve(request.result || null);
+        };
+        request.onerror = () => {
+            database.close();
+            reject(request.error || new Error('Could not read the CSV file link'));
+        };
+    });
+}
+
+async function writeDeckProgressToCSV(deckId) {
+    const fileHandle = await getCSVFileHandle(deckId);
+    if (!fileHandle) {
+        return false;
+    }
+
+    const permission = await fileHandle.queryPermission({ mode: 'readwrite' });
+    if (permission !== 'granted') {
+        throw new Error('CSV write access is not enabled. Enable CSV updates and try again.');
+    }
+
+    const response = await fetch(api.getDeckExportUrl(deckId));
+    if (!response.ok) {
+        throw new Error(`Could not export CSV progress (HTTP ${response.status})`);
+    }
+
+    const writable = await fileHandle.createWritable();
+    try {
+        await writable.write(await response.blob());
+        await writable.close();
+    } catch (error) {
+        await writable.abort();
+        throw error;
+    }
+    return true;
+}
+
 // ==================== MAIN APP ====================
 // Top-level application component. Controls page navigation and deck loading.
 function App() {
@@ -178,6 +259,7 @@ function App() {
 function MainMenu({ decks, loading, onSelectDeck, onRefresh, setCurrentPage }) {
     const [showNewDeck, setShowNewDeck] = useState(false);
     const [showImportCSV, setShowImportCSV] = useState(false);
+    const [importNotice, setImportNotice] = useState(null);
 
     return (
         <div className="page">
@@ -185,6 +267,8 @@ function MainMenu({ decks, loading, onSelectDeck, onRefresh, setCurrentPage }) {
                 <h1>German Flashcard App</h1>
                 <p>Master German vocabulary with spaced repetition</p>
             </div>
+
+            {importNotice && <div className="alert alert-warning">{importNotice}</div>}
 
             {showNewDeck && (
                 <NewDeckModal 
@@ -199,8 +283,9 @@ function MainMenu({ decks, loading, onSelectDeck, onRefresh, setCurrentPage }) {
             {showImportCSV && (
                 <ImportCSVModal 
                     onClose={() => setShowImportCSV(false)}
-                    onSuccess={() => {
+                    onSuccess={notice => {
                         setShowImportCSV(false);
+                        setImportNotice(notice);
                         onRefresh();
                     }}
                 />
@@ -314,13 +399,13 @@ function NewDeckModal({ onClose, onSuccess }) {
 function ImportCSVModal({ onClose, onSuccess }) {
     const [deckName, setDeckName] = useState('');
     const [file, setFile] = useState(null);
+    const [fileHandle, setFileHandle] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [preview, setPreview] = useState([]);
     const fileInputRef = useRef(null);
 
-    function handleFileSelect(e) {
-        const selectedFile = e.target.files[0];
+    function handleSelectedFile(selectedFile, selectedHandle = null) {
         if (!selectedFile) return;
 
         if (!selectedFile.name.toLowerCase().endsWith('.csv')) {
@@ -329,8 +414,9 @@ function ImportCSVModal({ onClose, onSuccess }) {
         }
 
         setFile(selectedFile);
+        setFileHandle(selectedHandle);
         const suggestedName = selectedFile.name.replace(/\.csv$/i, '').trim();
-        setDeckName(currentName => currentName.trim() ? currentName : suggestedName);
+        setDeckName(suggestedName);
         setError(null);
 
         // Read and preview file
@@ -341,6 +427,29 @@ function ImportCSVModal({ onClose, onSuccess }) {
             setPreview(lines.map(line => line.split(',').slice(0, 2))); // Show first 2 columns
         };
         reader.readAsText(selectedFile);
+    }
+
+    function handleFileSelect(e) {
+        handleSelectedFile(e.target.files[0]);
+    }
+
+    async function chooseCSVFile() {
+        try {
+            const [selectedHandle] = await window.showOpenFilePicker({
+                multiple: false,
+                types: [{ description: 'CSV files', accept: { 'text/csv': ['.csv'] } }],
+            });
+            const permission = await selectedHandle.requestPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') {
+                setError('Write access is required to update this CSV with study progress.');
+                return;
+            }
+            handleSelectedFile(await selectedHandle.getFile(), selectedHandle);
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                setError('Could not open the CSV file: ' + err.message);
+            }
+        }
     }
 
     async function handleSubmit(e) {
@@ -365,14 +474,24 @@ function ImportCSVModal({ onClose, onSuccess }) {
                 const fileContent = event.target.result;
 
                 try {
-                    await api.request('/decks/import-csv', {
+                    const importedDeck = await api.request('/decks/import-csv', {
                         method: 'POST',
                         body: JSON.stringify({
                             deck_name: deckName,
                             file_content: fileContent
                         })
                     });
-                    onSuccess();
+                    let notice = null;
+                    if (fileHandle) {
+                        try {
+                            await saveCSVFileHandle(importedDeck.deck_id, fileHandle);
+                        } catch (err) {
+                            notice = 'Deck imported, but automatic CSV updates could not be enabled: ' + err.message;
+                        }
+                    } else {
+                        notice = 'This browser cannot write to the selected CSV directly. Progress is saved in the app; use Deck Manager → Export CSV to save it to a file.';
+                    }
+                    onSuccess(notice);
                 } catch (err) {
                     setError(err.message);
                 } finally {
@@ -406,13 +525,24 @@ function ImportCSVModal({ onClose, onSuccess }) {
                     
                     <div className="form-group">
                         <label>CSV File * (German word | English definition)</label>
-                        <input 
-                            type="file"
-                            ref={fileInputRef}
-                            accept=".csv"
-                            onChange={handleFileSelect}
-                            style={{padding: '10px', border: '2px dashed #06B6D4', borderRadius: '8px', cursor: 'pointer'}}
-                        />
+                        {typeof window.showOpenFilePicker === 'function' ? (
+                            <button type="button" className="btn btn-secondary" onClick={chooseCSVFile}>
+                                Choose CSV and enable progress write-back
+                            </button>
+                        ) : (
+                            <>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    accept=".csv"
+                                    onChange={handleFileSelect}
+                                    style={{padding: '10px', border: '2px dashed #06B6D4', borderRadius: '8px', cursor: 'pointer'}}
+                                />
+                                <p className="card-subtitle">
+                                    Direct CSV updates are not supported in this browser; use Deck Manager → Export CSV to save progress.
+                                </p>
+                            </>
+                        )}
                     </div>
 
                     {preview.length > 0 && (
@@ -463,10 +593,12 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
     const [includeAll, setIncludeAll] = useState(true);
     const [completionMessage, setCompletionMessage] = useState('');
     const [studyError, setStudyError] = useState(null);
+    const [csvSyncStatus, setCSVSyncStatus] = useState('checking');
 
     useEffect(() => {
         loadRandomCard(null, true);
         loadStats();
+        loadCSVSyncStatus();
     }, [deck.id]);
 
     async function loadRandomCard(excludeCardId = null, allCards = includeAll) {
@@ -504,17 +636,64 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
         }
     }
 
+    async function loadCSVSyncStatus() {
+        try {
+            const fileHandle = await getCSVFileHandle(deck.id);
+            if (!fileHandle) {
+                setCSVSyncStatus('unlinked');
+                return;
+            }
+            const permission = await fileHandle.queryPermission({ mode: 'readwrite' });
+            setCSVSyncStatus(permission === 'granted' ? 'ready' : 'permission-needed');
+        } catch (err) {
+            setCSVSyncStatus('error');
+            setStudyError('Failed to check CSV write access: ' + err.message);
+        }
+    }
+
+    async function enableCSVWriteBack() {
+        try {
+            const fileHandle = await getCSVFileHandle(deck.id);
+            if (!fileHandle) {
+                throw new Error('No source CSV is linked to this deck.');
+            }
+            const permission = await fileHandle.requestPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') {
+                throw new Error('Write access was not granted.');
+            }
+            await writeDeckProgressToCSV(deck.id);
+            setCSVSyncStatus('ready');
+            setStudyError(null);
+        } catch (err) {
+            setCSVSyncStatus('error');
+            setStudyError('Could not save progress to the CSV: ' + err.message);
+        }
+    }
+
     // Rate the current card and immediately load the next due card.
     async function handleRate(quality) {
-        if (!card) {
+        if (!card || !flipped) {
             return;
         }
 
         try {
             setLoading(true);
             await api.rateCard(card.id, quality);
+            let csvWriteError = null;
+            try {
+                const csvUpdated = await writeDeckProgressToCSV(deck.id);
+                if (csvUpdated) {
+                    setCSVSyncStatus('ready');
+                }
+            } catch (err) {
+                csvWriteError = err;
+                setCSVSyncStatus('permission-needed');
+            }
             await loadRandomCard(card.id, includeAll);
             await loadStats();
+            if (csvWriteError) {
+                setStudyError('Rating was saved, but progress could not be written to the CSV: ' + csvWriteError.message);
+            }
         } catch (err) {
             setStudyError('Failed to save your rating: ' + err.message);
         } finally {
@@ -583,6 +762,17 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
             )}
 
             {studyError && <div className="alert alert-danger">{studyError}</div>}
+            {csvSyncStatus === 'ready' && (
+                <div className="alert alert-info">Study progress is written to the source CSV after each rating.</div>
+            )}
+            {(csvSyncStatus === 'permission-needed' || csvSyncStatus === 'error') && (
+                <div className="alert alert-warning">
+                    <p>CSV write access is needed to sync study progress.</p>
+                    <button className="btn btn-warning" disabled={loading} onClick={enableCSVWriteBack}>
+                        Enable or retry CSV updates
+                    </button>
+                </div>
+            )}
 
             {completed ? (
                 <div className="card" style={{textAlign: 'center', padding: '40px'}}>
