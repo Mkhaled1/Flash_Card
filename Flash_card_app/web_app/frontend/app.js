@@ -402,10 +402,19 @@ function ImportCSVModal({ onClose, onSuccess }) {
     const [deckName, setDeckName] = useState('');
     const [file, setFile] = useState(null);
     const [fileHandle, setFileHandle] = useState(null);
+    const [folderFiles, setFolderFiles] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [preview, setPreview] = useState([]);
     const fileInputRef = useRef(null);
+    const folderInputRef = useRef(null);
+    const supportsFolderUpload = 'webkitdirectory' in document.createElement('input');
+
+    useEffect(() => {
+        if (folderInputRef.current) {
+            folderInputRef.current.setAttribute('webkitdirectory', '');
+        }
+    }, []);
 
     function handleSelectedFile(selectedFile, selectedHandle = null) {
         if (!selectedFile) return;
@@ -417,6 +426,7 @@ function ImportCSVModal({ onClose, onSuccess }) {
 
         setFile(selectedFile);
         setFileHandle(selectedHandle);
+        setFolderFiles([]);
         const suggestedName = selectedFile.name.replace(/\.csv$/i, '').trim();
         setDeckName(suggestedName);
         setError(null);
@@ -433,6 +443,26 @@ function ImportCSVModal({ onClose, onSuccess }) {
 
     function handleFileSelect(e) {
         handleSelectedFile(e.target.files[0]);
+    }
+
+    function handleFolderSelect(e) {
+        const selectedFiles = Array.from(e.target.files || []);
+        e.target.value = '';
+        const csvFiles = selectedFiles.filter(selectedFile =>
+            selectedFile.name.toLowerCase().endsWith('.csv')
+        );
+
+        if (csvFiles.length === 0) {
+            setError('The selected folder contains no CSV files');
+            setFolderFiles([]);
+            return;
+        }
+
+        setFile(null);
+        setFileHandle(null);
+        setFolderFiles(csvFiles);
+        setPreview([]);
+        setError(null);
     }
 
     async function chooseCSVFile() {
@@ -454,55 +484,93 @@ function ImportCSVModal({ onClose, onSuccess }) {
         }
     }
 
+    function readFileAsDataURL(selectedFile) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error || new Error('Could not read the CSV file'));
+            reader.readAsDataURL(selectedFile);
+        });
+    }
+
     async function handleSubmit(e) {
         e.preventDefault();
 
-        if (!deckName.trim()) {
+        if (folderFiles.length === 0 && !deckName.trim()) {
             setError('Deck name is required');
             return;
         }
 
-        if (!file) {
+        if (folderFiles.length === 0 && !file) {
             setError('Please select a CSV file');
             return;
         }
 
+        setLoading(true);
+        setError(null);
         try {
-            setLoading(true);
+            if (folderFiles.length > 0) {
+                const imported = [];
+                const failed = [];
 
-            // Read file as base64
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const fileContent = event.target.result;
+                for (const folderFile of folderFiles) {
+                    const relativePath = folderFile.webkitRelativePath || folderFile.name;
+                    const filename = relativePath.split(/[\\/]/).pop();
+                    const fileDeckName = filename.replace(/\.csv$/i, '').trim();
 
-                try {
-                    const importedDeck = await api.request('/decks/import-csv', {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            deck_name: deckName,
-                            file_content: fileContent
-                        })
-                    });
-                    let notice = null;
-                    if (fileHandle) {
-                        try {
-                            await saveCSVFileHandle(importedDeck.deck_id, fileHandle);
-                        } catch (err) {
-                            notice = 'Deck imported, but automatic CSV updates could not be enabled: ' + err.message;
-                        }
-                    } else {
-                        notice = 'This browser cannot write to the selected CSV directly. Progress is saved in the app; use Deck Manager → Export CSV to save it to a file.';
+                    try {
+                        const fileContent = await readFileAsDataURL(folderFile);
+                        const importedDeck = await api.request('/decks/import-csv', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                deck_name: fileDeckName,
+                                file_content: fileContent
+                            })
+                        });
+                        imported.push(importedDeck);
+                    } catch (err) {
+                        failed.push(`${relativePath}: ${err.message}`);
                     }
-                    onSuccess(notice);
-                } catch (err) {
-                    setError(err.message);
-                } finally {
-                    setLoading(false);
                 }
-            };
-            reader.readAsDataURL(file);
+
+                if (imported.length === 0) {
+                    setError(`No decks were imported. ${failed.join('; ')}`);
+                    return;
+                }
+
+                const totalCards = imported.reduce((total, deck) => total + deck.imported_cards, 0);
+                const skippedRows = imported.reduce((total, deck) => total + deck.skipped_rows, 0);
+                const summary = [
+                    `Imported ${imported.length} of ${folderFiles.length} CSV files as decks (${totalCards} flashcards).`,
+                    skippedRows > 0 ? `${skippedRows} invalid rows were skipped.` : '',
+                    failed.length > 0 ? `Failed: ${failed.join('; ')}` : ''
+                ].filter(Boolean).join(' ');
+                onSuccess(failed.length > 0 || skippedRows > 0 ? summary : null);
+                return;
+            }
+
+            const fileContent = await readFileAsDataURL(file);
+            const importedDeck = await api.request('/decks/import-csv', {
+                method: 'POST',
+                body: JSON.stringify({
+                    deck_name: deckName,
+                    file_content: fileContent
+                })
+            });
+            let notice = null;
+            if (fileHandle) {
+                try {
+                    await saveCSVFileHandle(importedDeck.deck_id, fileHandle);
+                } catch (err) {
+                    notice = 'Deck imported, but automatic CSV updates could not be enabled: ' + err.message;
+                }
+            } else {
+                notice = 'This browser cannot write to the selected CSV directly. Progress is saved in the app; use Deck Manager → Export CSV to save it to a file.';
+            }
+            onSuccess(notice);
         } catch (err) {
             setError(err.message);
+        } finally {
             setLoading(false);
         }
     }
@@ -547,6 +615,34 @@ function ImportCSVModal({ onClose, onSuccess }) {
                         )}
                     </div>
 
+                    <div className="form-group">
+                        <input
+                            type="file"
+                            ref={folderInputRef}
+                            multiple
+                            onChange={handleFolderSelect}
+                            style={{display: 'none'}}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={!supportsFolderUpload || loading}
+                            onClick={() => folderInputRef.current && folderInputRef.current.click()}
+                        >
+                            Import a Folder of CSVs
+                        </button>
+                        {folderFiles.length > 0 && (
+                            <p className="card-subtitle">
+                                {folderFiles.length} CSV file{folderFiles.length === 1 ? '' : 's'} selected. Each will become a separate deck named after its file.
+                            </p>
+                        )}
+                        {!supportsFolderUpload && (
+                            <p className="card-subtitle">
+                                Folder import is not supported by this browser. Choose CSV files individually instead.
+                            </p>
+                        )}
+                    </div>
+
                     {preview.length > 0 && (
                         <div className="card" style={{marginBottom: '15px', backgroundColor: '#F0F9FF'}}>
                             <div className="card-title">Preview</div>
@@ -570,8 +666,8 @@ function ImportCSVModal({ onClose, onSuccess }) {
                     )}
                     
                     <div className="btn-group">
-                        <button type="submit" className="btn btn-success btn-block" disabled={loading || !file}>
-                            {loading ? 'Importing...' : 'Import Deck'}
+                        <button type="submit" className="btn btn-success btn-block" disabled={loading || (!file && folderFiles.length === 0)}>
+                            {loading ? 'Importing...' : folderFiles.length > 0 ? 'Import Folder' : 'Import Deck'}
                         </button>
                         <button type="button" className="btn btn-secondary btn-block" onClick={onClose}>
                             Cancel

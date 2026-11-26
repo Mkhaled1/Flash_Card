@@ -186,6 +186,13 @@ The SM-2 algorithm updates cards based on quality ratings:
 5. Preview shows first 3 rows
 6. Click **"Import Deck"** to import all cards
 
+To import a folder, click **"Import a Folder of CSVs"** and select a folder.
+Each CSV in that folder, including CSVs in subfolders, becomes a separate deck
+named after the file. Non-CSV files are ignored. If a file cannot be imported
+(for example, because a deck with that name already exists), the app reports it
+along with the successful imports. Folder selection requires browser support;
+single-file import remains available otherwise.
+
 **Example CSV format:**
 ```csv
 word,definition
