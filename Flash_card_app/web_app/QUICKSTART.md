@@ -42,6 +42,10 @@ separate frontend server is needed. The `run.bat` and `run.sh` scripts also star
    - Rate your knowledge level
    - Review until all cards are mastered!
 
+4. **Keep Old Decks**
+   - Open **📚 Deck Manager** and choose **Archive** to remove a deck from normal study without deleting it
+   - Find archived decks in the same page and choose **Restore** to use them again
+
 ---
 
 ## CSV File Format

@@ -38,10 +38,12 @@ class APIClient {
 
     // Decks
     getDecks() { return this.request('/decks'); }
+    getArchivedDecks() { return this.request('/decks/archived'); }
     createDeck(name, description) { return this.request('/decks', { method: 'POST', body: JSON.stringify({ name, description }) }); }
     getDeck(id) { return this.request(`/decks/${id}`); }
     updateDeck(id, data) { return this.request(`/decks/${id}`, { method: 'PUT', body: JSON.stringify(data) }); }
-    deleteDeck(id) { return this.request(`/decks/${id}`, { method: 'DELETE' }); }
+    archiveDeck(id) { return this.request(`/decks/${id}`, { method: 'DELETE' }); }
+    restoreDeck(id) { return this.request(`/decks/${id}/restore`, { method: 'POST' }); }
     getDeckStats(id) { return this.request(`/decks/${id}/stats`); }
 
     // Cards
@@ -707,8 +709,24 @@ function StudyPage({ deck, onBack, setCurrentPage }) {
         loadRandomCard(null, allCards);
     }
 
-    const cardRatingClass = card
-        ? `rating-${card.rating.toLowerCase().replace(/\s/g, '-')}`
+    const ratingClasses = {
+        '0': 'unknown',
+        '1': 'hard',
+        '2': 'medium',
+        '3': 'memorized',
+        '5': 'perfect',
+        unknown: 'unknown',
+        hard: 'hard',
+        medium: 'medium',
+        memorized: 'memorized',
+        perfect: 'perfect'
+    };
+    const rating = card?.rating;
+    const normalizedRating = rating == null
+        ? ''
+        : String(rating).trim().toLowerCase().replace(/\s+/g, '-');
+    const cardRatingClass = ratingClasses[normalizedRating]
+        ? `rating-${ratingClasses[normalizedRating]}`
         : '';
 
     return (
@@ -1333,20 +1351,53 @@ function StatsPage({ deck, darkMode, onBack }) {
 }
 
 // ==================== DECK MANAGER ====================
-// Deck management view for resetting or deleting entire decks.
+// Deck management view for resetting, archiving, and restoring decks.
 function DeckManagerPage({ decks, onRefresh, onBack }) {
     const [loading, setLoading] = useState(false);
+    const [archivedLoading, setArchivedLoading] = useState(false);
+    const [archivedDecks, setArchivedDecks] = useState([]);
     const [error, setError] = useState(null);
     const [showMerge, setShowMerge] = useState(false);
 
-    async function handleDeleteDeck(deckId, deckName) {
-        if (!confirm(`Delete deck "${deckName}" and all its cards?`)) return;
+    useEffect(() => {
+        loadArchivedDecks();
+    }, []);
+
+    async function loadArchivedDecks() {
+        try {
+            setArchivedLoading(true);
+            setArchivedDecks(await api.getArchivedDecks());
+            setError(null);
+        } catch (err) {
+            setError('Failed to load archived decks: ' + err.message);
+        } finally {
+            setArchivedLoading(false);
+        }
+    }
+
+    async function handleArchiveDeck(deckId, deckName) {
+        if (!confirm(`Archive "${deckName}"? Its cards and progress will be kept and can be restored later.`)) return;
 
         try {
             setLoading(true);
-            await api.deleteDeck(deckId);
-            onRefresh();
+            await api.archiveDeck(deckId);
+            await onRefresh();
             setError(null);
+            await loadArchivedDecks();
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function handleRestoreDeck(deckId) {
+        try {
+            setLoading(true);
+            await api.restoreDeck(deckId);
+            await onRefresh();
+            setError(null);
+            await loadArchivedDecks();
         } catch (err) {
             setError(err.message);
         } finally {
@@ -1396,10 +1447,67 @@ function DeckManagerPage({ decks, onRefresh, onBack }) {
 
             {loading ? (
                 <div className="spinner"></div>
-            ) : decks.length === 0 ? (
-                <div className="card">
-                    <p style={{textAlign: 'center', color: '#9CA3AF'}}>No decks to manage</p>
-                </div>
+            ) : (
+                <>
+                    <h2>Active decks</h2>
+                    {decks.length === 0 ? (
+                        <div className="card"><p>No active decks.</p></div>
+                    ) : (
+                        <div className="table-scroll">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Deck Name</th>
+                                        <th>Description</th>
+                                        <th>Cards</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {decks.map(deck => (
+                                        <tr key={deck.id}>
+                                            <td><strong>{deck.name}</strong></td>
+                                            <td>{deck.description || '—'}</td>
+                                            <td>{deck.card_count}</td>
+                                            <td>
+                                                <div className="btn-group deck-actions" style={{gap: '5px'}}>
+                                                    <button
+                                                        className="btn btn-warning"
+                                                        style={{padding: '5px 10px', fontSize: '12px'}}
+                                                        onClick={() => handleResetDeck(deck.id, deck.name)}
+                                                    >
+                                                        Reset
+                                                    </button>
+                                                    <a
+                                                        className="btn btn-primary"
+                                                        style={{padding: '5px 10px', fontSize: '12px'}}
+                                                        href={api.getDeckExportUrl(deck.id)}
+                                                    >
+                                                        Export CSV
+                                                    </a>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        style={{padding: '5px 10px', fontSize: '12px'}}
+                                                        onClick={() => handleArchiveDeck(deck.id, deck.name)}
+                                                    >
+                                                        Archive
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </>
+            )}
+
+            <h2 style={{marginTop: '30px'}}>Archived decks ({archivedDecks.length})</h2>
+            {archivedLoading ? (
+                <div className="spinner"></div>
+            ) : archivedDecks.length === 0 ? (
+                <div className="card"><p>No archived decks. Archived decks will be kept here for restoration.</p></div>
             ) : (
                 <div className="table-scroll">
                     <table>
@@ -1412,7 +1520,7 @@ function DeckManagerPage({ decks, onRefresh, onBack }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {decks.map(deck => (
+                            {archivedDecks.map(deck => (
                                 <tr key={deck.id}>
                                     <td><strong>{deck.name}</strong></td>
                                     <td>{deck.description || '—'}</td>
@@ -1420,11 +1528,12 @@ function DeckManagerPage({ decks, onRefresh, onBack }) {
                                     <td>
                                         <div className="btn-group deck-actions" style={{gap: '5px'}}>
                                             <button
-                                                className="btn btn-warning"
+                                                className="btn btn-success"
                                                 style={{padding: '5px 10px', fontSize: '12px'}}
-                                                onClick={() => handleResetDeck(deck.id, deck.name)}
+                                                disabled={loading}
+                                                onClick={() => handleRestoreDeck(deck.id)}
                                             >
-                                                Reset
+                                                Restore
                                             </button>
                                             <a
                                                 className="btn btn-primary"
@@ -1433,13 +1542,6 @@ function DeckManagerPage({ decks, onRefresh, onBack }) {
                                             >
                                                 Export CSV
                                             </a>
-                                            <button
-                                                className="btn btn-danger"
-                                                style={{padding: '5px 10px', fontSize: '12px'}}
-                                                onClick={() => handleDeleteDeck(deck.id, deck.name)}
-                                            >
-                                                Delete
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>

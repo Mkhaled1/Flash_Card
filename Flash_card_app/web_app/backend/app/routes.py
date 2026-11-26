@@ -19,8 +19,15 @@ api = Blueprint('api', __name__, url_prefix='/api')
 
 @api.route('/decks', methods=['GET'])
 def get_decks():
-    """Get all decks"""
-    decks = Deck.query.all()
+    """Get active decks"""
+    decks = Deck.query.filter_by(is_archived=False).all()
+    return jsonify([deck.to_dict() for deck in decks])
+
+
+@api.route('/decks/archived', methods=['GET'])
+def get_archived_decks():
+    """Get archived decks"""
+    decks = Deck.query.filter_by(is_archived=True).all()
     return jsonify([deck.to_dict() for deck in decks])
 
 
@@ -66,9 +73,12 @@ def merge_decks():
     if Deck.query.filter_by(name=name).first():
         return jsonify({'error': 'Deck name already exists'}), 400
 
-    source_decks = Deck.query.filter(Deck.id.in_(deck_ids)).all()
+    source_decks = Deck.query.filter(
+        Deck.id.in_(deck_ids),
+        Deck.is_archived.is_(False),
+    ).all()
     if len(source_decks) != len(deck_ids):
-        return jsonify({'error': 'One or more selected decks no longer exist'}), 404
+        return jsonify({'error': 'One or more selected decks are archived or no longer exist'}), 404
 
     source_by_id = {deck.id: deck for deck in source_decks}
     ordered_sources = [source_by_id[deck_id] for deck_id in deck_ids]
@@ -130,11 +140,20 @@ def update_deck(deck_id):
 
 @api.route('/decks/<int:deck_id>', methods=['DELETE'])
 def delete_deck(deck_id):
-    """Delete a deck"""
+    """Archive a deck without deleting its cards or progress"""
     deck = Deck.query.get_or_404(deck_id)
-    db.session.delete(deck)
+    deck.is_archived = True
     db.session.commit()
     return '', 204
+
+
+@api.route('/decks/<int:deck_id>/restore', methods=['POST'])
+def restore_deck(deck_id):
+    """Restore an archived deck"""
+    deck = Deck.query.get_or_404(deck_id)
+    deck.is_archived = False
+    db.session.commit()
+    return jsonify(deck.to_dict())
 
 
 @api.route('/decks/<int:deck_id>/stats', methods=['GET'])

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from flask import Flask
+from sqlalchemy import inspect, text
 from app.config import Config
 from app.models import db
 from app.routes import api
@@ -34,6 +35,14 @@ def create_app():
     # Create database tables
     with app.app_context():
         db.create_all()
+        deck_columns = {
+            column['name'] for column in inspect(db.engine).get_columns('decks')
+        }
+        if 'is_archived' not in deck_columns:
+            db.session.execute(text(
+                'ALTER TABLE decks ADD COLUMN is_archived BOOLEAN NOT NULL DEFAULT FALSE'
+            ))
+            db.session.commit()
     
     return app
 

@@ -8,7 +8,7 @@ A modern web-based flashcard application for learning German using spaced repeti
 - ✅ **6-Level Status System** - New → Unknown → Hard → Medium → Memorized → Perfectly Memorized
 - ✅ **Interactive Card Flipping** - Smooth 3D flip animations
 - ✅ **Real-time Progress** - Track mastery percentage and learning progress
-- ✅ **Deck Management** - Create, merge, reset, delete, import, and export decks
+- ✅ **Deck Management** - Create, merge, reset, archive, restore, import, and export decks
 - ✅ **Card Editor** - Add, edit, and delete flashcards
 - ✅ **Card Status** - Review ratings and reset selected or all cards
 - ✅ **Dark Mode** - Switch themes with the setting remembered on your device
@@ -29,7 +29,7 @@ connection URL. Without that setting, the app uses SQLite, which is not persiste
 on Render's free web-service filesystem.
 
 The app currently has no login or access control. Anyone who can reach the deployed
-URL can view, change, and delete its decks, so don't store private data or share the
+URL can view, change, archive, and reset its decks, so don't store private data or share the
 URL until authentication is added.
 
 ## Project Structure
@@ -68,12 +68,14 @@ frontend server or build step is needed.
 ## API Endpoints
 
 ### Decks
-- `GET /api/decks` - Get all decks
+- `GET /api/decks` - Get active decks
+- `GET /api/decks/archived` - Get archived decks
 - `POST /api/decks` - Create new deck
 - `POST /api/decks/merge` - Merge selected decks into a new deck
 - `GET /api/decks/<id>` - Get deck details
 - `PUT /api/decks/<id>` - Update deck
-- `DELETE /api/decks/<id>` - Delete deck
+- `DELETE /api/decks/<id>` - Archive deck, keeping its cards and progress
+- `POST /api/decks/<id>/restore` - Restore an archived deck
 - `GET /api/decks/<id>/stats` - Get deck statistics
 
 ### Flashcards
@@ -134,6 +136,7 @@ The SQLite database file is automatically created in the backend instance direct
 - id (Integer, PK)
 - name (String, unique)
 - description (String)
+- is_archived (Boolean) - Whether the deck is hidden from normal study
 - created_at (DateTime)
 - updated_at (DateTime)
 
@@ -212,8 +215,8 @@ Sprechen,To speak
 
 ### Managing Decks
 1. Click **"📚 Deck Manager"** from the main menu
-2. Reset all cards in a deck or delete entire decks
-3. Use caution - deletion cannot be undone
+2. Reset cards or archive decks you no longer want to study
+3. Archived decks and their progress remain in Deck Manager; use **Restore** to return one to study
 
 ## Color Scheme
 
